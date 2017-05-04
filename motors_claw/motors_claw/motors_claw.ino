@@ -2,6 +2,7 @@
 #include <ArduinoHardware.h>
 #include <ros.h>
 #include <Servo.h>
+#include <Encoder.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Empty.h>
 #include <geometry_msgs/Twist.h>
@@ -68,6 +69,16 @@ Adafruit_NeoPixel h2 = Adafruit_NeoPixel(numPixels, headlight2, NEO_GRBW + NEO_K
 Adafruit_NeoPixel b1 = Adafruit_NeoPixel(numPixels, backlight1, NEO_GRBW + NEO_KHZ800);
 Adafruit_NeoPixel b2 = Adafruit_NeoPixel(numPixels, backlight2, NEO_GRBW + NEO_KHZ800);
 
+
+Encoder knobLeft(21, 20);
+Encoder knobRight(18, 19);
+
+std_msgs::Int16MultiArray arr;
+ros::Publisher encoder("encoder", &arr);
+
+// for encoder
+int positionLeft  = -999;
+int positionRight = -999;
 
 int irRead() {
   int averaging = 0;             //  Holds value to average readings
@@ -146,7 +157,7 @@ void cb(const geometry_msgs::Twist& twist_msg){
   turnLeft = false;
   straight = true;
   
-	//convert msg (in linear and angular components) into left and right motor speeds
+  //convert msg (in linear and angular components) into left and right motor speeds
   velocity = (int) twist_msg.linear.x;
   leftMotorSpeed= velocity;
   rightMotorSpeed = velocity;
@@ -244,6 +255,9 @@ void setup() {
   h2.show();
 
   nh.initNode();
+  nh.advertise(encoder);
+  arr.data = (int16_t*) malloc(3);
+  arr.data_length = 2;
   nh.advertise(e_stop);
   nh.subscribe(sub);
   nh.subscribe(sub2);
@@ -305,6 +319,28 @@ void loop() {
   
   //publish the data
   e_stop.publish( &e_stop_msg);
+
+
+  // encoder msg 
+  long newLeft, newRight; 
+  newLeft = knobLeft.read();
+  newRight = knobRight.read();
+  
+  if (newLeft != positionLeft || newRight != positionRight) { // if changed, then print the updated value and 
+    positionLeft = newLeft;
+    positionRight = newRight; 
+
+    //publishes
+    arr.data[0] = positionLeft;
+    arr.data[1] = positionRight;
+    encoder.publish(&arr);
+
+    // resets 
+    knobLeft.write(0);
+    knobRight.write(0);
+  }
+   encoder.publish(&arr);
+
   
   nh.spinOnce();
 }
